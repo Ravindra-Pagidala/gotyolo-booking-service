@@ -26,10 +26,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdAndUserId(UUID id, UUID userId);
 
     @Modifying
-    @Query("UPDATE Booking b SET b.state = 'EXPIRED', b.updatedAt = CURRENT_TIMESTAMP " +
-            "WHERE b.state = 'PENDING_PAYMENT' AND b.expiresAt < CURRENT_TIMESTAMP")
-    int expirePendingBookings();
-
+    @Query("UPDATE Booking b SET b.state = :expiredState, b.updatedAt = CURRENT_TIMESTAMP() " +
+            "WHERE b.state = :pendingState AND b.expiresAt < CURRENT_TIMESTAMP()")
+    int expirePendingBookings(@Param("pendingState") BookingState pendingState,
+                              @Param("expiredState") BookingState expiredState);
     // Idempotency key only update
     @Modifying
     @Query("UPDATE Booking b SET b.idempotencyKey = :key WHERE b.idempotencyKey = :key")
@@ -39,9 +39,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT SUM(b.numSeats) FROM Booking b WHERE b.tripId = :tripId AND b.state = :state")
     Integer countTotalSeatsByTripIdAndState(@Param("tripId") UUID tripId, @Param("state") BookingState state);
 
-    //  Gross revenue (SUM priceAtBooking)
-    @Query("SELECT COALESCE(SUM(b.priceAtBooking), 0) FROM Booking b WHERE b.tripId = :tripId AND b.state = 'CONFIRMED'")
-    BigDecimal calculateGrossRevenue(@Param("tripId") UUID tripId);
+    @Query("SELECT COALESCE(SUM(b.priceAtBooking), 0) FROM Booking b " +
+            "WHERE b.tripId = :tripId AND b.state = :state")
+    BigDecimal calculateGrossRevenue(@Param("tripId") UUID tripId,
+                                     @Param("state") BookingState state);
 
     // Total refunds
     @Query("SELECT COALESCE(SUM(b.refundAmount), 0) FROM Booking b WHERE b.tripId = :tripId AND b.refundAmount IS NOT NULL")

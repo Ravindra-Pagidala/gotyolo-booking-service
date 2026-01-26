@@ -39,7 +39,7 @@ public class TripService {
 
     public List<TripResponse> getPublishedTrips() {
         log.debug("Fetching all published trips");
-        return tripRepository.findAllByStatus(TripStatus.PUBLISHED).stream()  // FIXED: findAllByStatus
+        return tripRepository.findAllByStatus(TripStatus.PUBLISHED).stream()
                 .map(this::mapToTripResponse)
                 .collect(Collectors.toList());
     }
@@ -52,7 +52,7 @@ public class TripService {
     }
 
     public Trip getTripForBookingWithLock(UUID tripId) {
-        Trip trip = tripRepository.findByIdForUpdate(tripId)  // FIXED: Correct method
+        Trip trip = tripRepository.findByIdForUpdate(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found: " + NullSafeUtils.safeToString(tripId)));
 
         if (!TripStatus.PUBLISHED.equals(trip.getStatus())) {

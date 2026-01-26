@@ -24,7 +24,7 @@ public class PaymentAndAdminController {
      * Payment provider webhook endpoint (ALWAYS returns 200)
      * POST /api/v1/payments/webhooks
      */
-    @PostMapping("/payments/webhooks")
+    @PostMapping("/payments/webhook")
     public ResponseEntity<Void> handlePaymentWebhook(@RequestBody WebhookRequest webhookRequest) {
         String bookingId = NullSafeUtils.safeToString(webhookRequest.bookingId());
         String status = NullSafeUtils.safeToString(webhookRequest.status());
@@ -38,7 +38,7 @@ public class PaymentAndAdminController {
      * Admin: Get comprehensive trip metrics and analytics
      * GET /api/v1/admin/trips/{tripId}/analytics
      */
-    @GetMapping("/admin/trips/{tripId}/analytics")
+    @GetMapping("/admin/trips/{tripId}/metrics")
     public ResponseEntity<TripMetricsResponse> getTripAnalytics(@PathVariable UUID tripId) {
         log.debug("Admin fetching analytics for trip: {}", NullSafeUtils.safeToString(tripId));
         TripMetricsResponse metrics = tripService.getTripMetrics(tripId);

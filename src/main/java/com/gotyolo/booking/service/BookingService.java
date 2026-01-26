@@ -44,8 +44,8 @@ public class BookingService {
         validateSeatsAvailability(trip, request.numSeats());
 
         Booking booking = Booking.builder()
-                .tripId(trip.getId())  // FIXED: UUID, not Trip object
-                .userId(UUID.fromString(NullSafeUtils.safeToString(request.userId())))  // FIXED: UUID
+                .tripId(trip.getId())
+                .userId(UUID.fromString(NullSafeUtils.safeToString(request.userId())))
                 .numSeats(NullSafeUtils.safeToInt(request.numSeats()))
                 .state(BookingState.PENDING_PAYMENT)
                 .priceAtBooking(NullSafeUtils.safeMultiply(trip.getPrice(), request.numSeats()))
@@ -54,7 +54,7 @@ public class BookingService {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        // FIXED: Atomic seat reservation
+        // Atomic seat reservation
         trip.setAvailableSeats(NullSafeUtils.safeSubtract(trip.getAvailableSeats(), request.numSeats()));
         trip.setUpdatedAt(LocalDateTime.now());
 
@@ -79,7 +79,7 @@ public class BookingService {
             return;
         }
 
-        // FIXED: Proper idempotency check
+        //  Proper idempotency check
         if (bookingRepository.existsByIdempotencyKey(idempotencyKey)) {
             log.info("Duplicate webhook ignored: {}", idempotencyKey);
             return;
@@ -99,7 +99,7 @@ public class BookingService {
 
         if ("success".equalsIgnoreCase(status)) {
             booking.setState(BookingState.CONFIRMED);
-            booking.setPaymentReference(idempotencyKey);  // FIXED: Use idempotencyKey
+            booking.setPaymentReference(idempotencyKey);  // Use idempotencyKey
         } else {
             booking.setState(BookingState.EXPIRED);
             // Release seats for failed payments
@@ -148,11 +148,10 @@ public class BookingService {
         return mapToBookingResponse(booking, booking.getTripId());
     }
 
-    // FIXED: Proper mapping with tripId parameter
     private BookingResponse mapToBookingResponse(Booking booking, UUID tripId) {
         return new BookingResponse(
                 NullSafeUtils.safeGetUUID(booking.getId()),
-                tripId,  // FIXED: Direct tripId from parameter
+                tripId,
                 NullSafeUtils.safeToString(booking.getUserId()),
                 NullSafeUtils.safeToInt(booking.getNumSeats()),
                 NullSafeUtils.safeGetBookingState(booking.getState()),

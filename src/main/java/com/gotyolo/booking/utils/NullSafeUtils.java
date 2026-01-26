@@ -10,57 +10,100 @@ import java.util.UUID;
 
 @UtilityClass
 public class NullSafeUtils {
-    
-    public static String safeToString(Object value) {
-        return value != null ? value.toString() : null;
-    }
-    
-    public static Integer safeToInt(Integer value) {
-        return value != null ? value : null;
-    }
-    
+
+    /**
+     * Null-safe UUID extraction
+     */
     public static UUID safeGetUUID(UUID id) {
-        return id;
+        return id != null ? id : null;
     }
-    
-    public static UUID safeParseUUID(String uuidStr) {
+
+
+    /**
+     * Safe string for JSON/DTO - actual null
+     */
+    public static String safeToString(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    /**
+     * Safe integer conversion from any number type
+     */
+    public static Integer safeToInt(Object value) {
+        if (value == null) return null;
+        if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Number) return ((Number) value).intValue();
         try {
-            return uuidStr != null ? UUID.fromString(uuidStr) : null;
+            return Integer.valueOf(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Safe UUID parsing from string
+     */
+    public static UUID safeParseUUID(String uuidStr) {
+        if (uuidStr == null || uuidStr.trim().isEmpty()) return null;
+        try {
+            return UUID.fromString(uuidStr.trim());
         } catch (IllegalArgumentException e) {
             return null;
         }
     }
-    
+
+    /**
+     * Null-safe BigDecimal extraction (ZERO fallback)
+     */
     public static BigDecimal safeGetBigDecimal(BigDecimal value) {
-        return value;
+        return value != null ? value : BigDecimal.ZERO;
     }
-    
+
+    /**
+     * Null-safe LocalDateTime extraction (NOW fallback)
+     */
     public static LocalDateTime safeGetLocalDateTime(LocalDateTime value) {
-        return value;
+        return value != null ? value : LocalDateTime.now();
     }
-    
+
+    /**
+     * Null-safe enum extraction with default
+     */
     public static BookingState safeGetBookingState(BookingState state) {
-        return state;
+        return state != null ? state : BookingState.EXPIRED;
     }
-    
+
     public static TripStatus safeGetTripStatus(TripStatus status) {
-        return status;
+        return status != null ? status : TripStatus.DRAFT;
     }
-    
+
+    /**
+     * Null/empty string check
+     */
     public static boolean isNullOrEmpty(String value) {
         return value == null || value.trim().isEmpty();
     }
-    
+
+    /**
+     * Safe multiplication for price calculations
+     */
     public static BigDecimal safeMultiply(BigDecimal price, Integer numSeats) {
-        if (price == null || numSeats == null) return BigDecimal.ZERO;
+        if (price == null || numSeats == null || numSeats <= 0) return BigDecimal.ZERO;
         return price.multiply(BigDecimal.valueOf(numSeats));
     }
-    
+
+    /**
+     * Safe subtraction for seat calculations (never negative)
+     */
     public static Integer safeSubtract(Integer available, Integer numSeats) {
-        if (available == null || numSeats == null) return 0;
+        if (available == null) available = 0;
+        if (numSeats == null) numSeats = 0;
         return Math.max(0, available - numSeats);
     }
-    
+
+    /**
+     * Safe addition for seat restoration
+     */
     public static Integer safeAdd(Integer a, Integer b) {
         return (a != null ? a : 0) + (b != null ? b : 0);
     }

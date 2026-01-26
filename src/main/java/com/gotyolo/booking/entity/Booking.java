@@ -2,16 +2,21 @@ package com.gotyolo.booking.entity;
 
 import com.gotyolo.booking.enums.BookingState;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "bookings")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "bookings")
 public class Booking {
     @Id
     @GeneratedValue
@@ -26,6 +31,7 @@ public class Booking {
     @Column(nullable = false)
     private Integer numSeats;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BookingState state;
     

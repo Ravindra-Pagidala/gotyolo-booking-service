@@ -24,7 +24,7 @@ public class BookingManagementController {
      * Create booking for trip (reserves seats, starts payment flow)
      * POST /api/v1/trips/{tripId}/bookings
      */
-    @PostMapping("/trips/{tripId}/bookings")
+    @PostMapping("/trips/{tripId}/book")
     public ResponseEntity<BookingResponse> createTripBooking(
             @PathVariable UUID tripId,
             @Valid @RequestBody CreateBookingRequest request) {
