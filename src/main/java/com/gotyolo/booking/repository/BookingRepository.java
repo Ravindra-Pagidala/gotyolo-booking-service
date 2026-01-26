@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,4 +34,17 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Modifying
     @Query("UPDATE Booking b SET b.idempotencyKey = :key WHERE b.idempotencyKey = :key")
     void saveIdempotencyKeyOnly(@Param("key") String key);
+
+    // Total booked seats by state (SUM numSeats)
+    @Query("SELECT SUM(b.numSeats) FROM Booking b WHERE b.tripId = :tripId AND b.state = :state")
+    Integer countTotalSeatsByTripIdAndState(@Param("tripId") UUID tripId, @Param("state") BookingState state);
+
+    //  Gross revenue (SUM priceAtBooking)
+    @Query("SELECT COALESCE(SUM(b.priceAtBooking), 0) FROM Booking b WHERE b.tripId = :tripId AND b.state = 'CONFIRMED'")
+    BigDecimal calculateGrossRevenue(@Param("tripId") UUID tripId);
+
+    // Total refunds
+    @Query("SELECT COALESCE(SUM(b.refundAmount), 0) FROM Booking b WHERE b.tripId = :tripId AND b.refundAmount IS NOT NULL")
+    BigDecimal calculateTotalRefunds(@Param("tripId") UUID tripId);
+
 }

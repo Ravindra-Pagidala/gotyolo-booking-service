@@ -1,9 +1,12 @@
 package com.gotyolo.booking.service;
 
 import com.gotyolo.booking.dto.*;
+import com.gotyolo.booking.entity.Booking;
 import com.gotyolo.booking.entity.Trip;
+import com.gotyolo.booking.enums.BookingState;
 import com.gotyolo.booking.enums.TripStatus;
 import com.gotyolo.booking.exception.ResourceNotFoundException;
+import com.gotyolo.booking.repository.BookingRepository;
 import com.gotyolo.booking.repository.TripRepository;
 import com.gotyolo.booking.utils.NullSafeUtils;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -24,6 +28,8 @@ import java.util.stream.Collectors;
 public class TripService {
 
     private final TripRepository tripRepository;
+
+    private final BookingRepository bookingRepository;
 
     @Value("${app.at-risk.days-before-departure:7}")
     private Integer atRiskDaysBefore;
@@ -93,21 +99,48 @@ public class TripService {
         log.debug("Calculating metrics for trip: {}", NullSafeUtils.safeToString(tripId));
         Trip trip = getTripById(tripId);
 
-        // TODO: Integrate with BookingService for real counts
-        Integer bookedSeats = NullSafeUtils.safeSubtract(trip.getMaxCapacity(), trip.getAvailableSeats());
-        Double occupancyPercent = calculateOccupancyPercent(trip.getMaxCapacity(), bookedSeats);
+        List<Booking> confirmedBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.CONFIRMED);
+        List<Booking> pendingBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.PENDING_PAYMENT);
+        List<Booking> cancelledBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.CANCELLED);
+        List<Booking> expiredBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.EXPIRED);
+
+        int confirmedCount = confirmedBookings.size();
+        int pendingCount = pendingBookings.size();
+        int cancelledCount = cancelledBookings.size();
+        int expiredCount = expiredBookings.size();
+
+        int confirmedBookedSeats = confirmedBookings.stream()
+                .mapToInt(b -> NullSafeUtils.safeToInt(b.getNumSeats()))
+                .sum();
+
+        Double occupancyPercent = trip.getMaxCapacity() != null && trip.getMaxCapacity() > 0
+                ? (double) confirmedBookedSeats / trip.getMaxCapacity() * 100
+                : 0.0;
+
+        BigDecimal grossRevenue = confirmedBookings.stream()
+                .map(Booking::getPriceAtBooking)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal refundsIssued = cancelledBookings.stream()
+                .map(Booking::getRefundAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal netRevenue = grossRevenue.subtract(refundsIssued);
 
         return new TripMetricsResponse(
                 trip.getId(),
                 trip.getTitle(),
-                occupancyPercent,
+                Math.round(occupancyPercent * 100.0) / 100.0,
                 trip.getMaxCapacity(),
-                bookedSeats,
+                confirmedBookedSeats,
                 trip.getAvailableSeats(),
-                new TripMetricsResponse.BookingSummary(0, 0, 0, 0),
-                new TripMetricsResponse.FinancialSummary(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)
+                new TripMetricsResponse.BookingSummary(confirmedCount, pendingCount, cancelledCount, expiredCount),
+                new TripMetricsResponse.FinancialSummary(grossRevenue, refundsIssued, netRevenue)
         );
     }
+
 
     private TripResponse mapToTripResponse(Trip trip) {
         return new TripResponse(
@@ -125,6 +158,27 @@ public class TripService {
                 NullSafeUtils.safeGetLocalDateTime(trip.getCreatedAt())
         );
     }
+
+    public AtRiskTripsResponse getAtRiskTrips() {
+        LocalDateTime cutoffDate = LocalDateTime.now().plusDays(atRiskDaysBefore);
+        List<Trip> upcomingTrips = tripRepository.findAllByStartDateBeforeAndStatus(cutoffDate, TripStatus.PUBLISHED);
+
+        List<AtRiskTripsResponse.AtRiskTrip> atRiskTrips = upcomingTrips.stream()
+                .filter(trip -> calculateOccupancyPercent(trip.getMaxCapacity(),
+                        trip.getMaxCapacity() - trip.getAvailableSeats()) < lowOccupancyThreshold)
+                .map(trip -> new AtRiskTripsResponse.AtRiskTrip(
+                        trip.getId(),
+                        trip.getTitle(),
+                        trip.getStartDate().toLocalDate(),
+                        calculateOccupancyPercent(trip.getMaxCapacity(),
+                                trip.getMaxCapacity() - trip.getAvailableSeats()),
+                        "Low occupancy with imminent departure"
+                ))
+                .toList();
+
+        return new AtRiskTripsResponse(atRiskTrips);
+    }
+
 
     private Double calculateOccupancyPercent(Integer totalSeats, Integer bookedSeats) {
         if (totalSeats == null || totalSeats == 0) return 0.0;
