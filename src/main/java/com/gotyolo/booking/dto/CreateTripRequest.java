@@ -31,5 +31,7 @@ public record CreateTripRequest(
     
     @Min(value = 0, message = "Fee percent must be 0-100")
     @Max(value = 100, message = "Fee percent must be 0-100")
-    Integer cancellationFeePercent
+    Integer cancellationFeePercent,
+
+    Boolean publishNow
 ) {}

@@ -78,7 +78,7 @@ public class TripService {
                 .price(NullSafeUtils.safeGetBigDecimal(request.price()))
                 .maxCapacity(NullSafeUtils.safeToInt(request.maxCapacity()))
                 .availableSeats(NullSafeUtils.safeToInt(request.maxCapacity()))
-                .status(TripStatus.DRAFT)
+                .status(request.publishNow()!=null && request.publishNow() ? TripStatus.PUBLISHED : TripStatus.DRAFT)
                 .refundableUntilDaysBefore(NullSafeUtils.safeToInt(request.refundableUntilDaysBefore()))
                 .cancellationFeePercent(NullSafeUtils.safeToInt(request.cancellationFeePercent()))
                 .createdAt(LocalDateTime.now())
