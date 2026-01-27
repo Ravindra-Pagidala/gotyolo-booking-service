@@ -4,6 +4,7 @@ import com.gotyolo.booking.entity.Trip;
 import com.gotyolo.booking.enums.TripStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
@@ -24,4 +25,16 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
     // Admin metrics (at-risk trips)
     List<Trip> findAllByStartDateBeforeAndStatus(LocalDateTime date, TripStatus status);
+
+    @Modifying
+    @Query("""
+       UPDATE Trip t
+       SET t.availableSeats = t.availableSeats + :seats
+       WHERE t.id = :tripId
+    """)
+    int releaseSeatsForExpiredBooking(
+            @Param("tripId") UUID tripId,
+            @Param("seats") Integer seats
+    );
+
 }

@@ -125,16 +125,13 @@ public class BookingService {
 
         LocalDateTime cutoffDate = calculateCutoff(trip);
         BigDecimal refundAmount = calculateRefundAmount(booking, trip, cutoffDate);
-        boolean releaseSeats = shouldReleaseSeats(cutoffDate);
 
         booking.setState(BookingState.CANCELLED);
         booking.setRefundAmount(refundAmount);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setUpdatedAt(LocalDateTime.now());
 
-        if (releaseSeats) {
-            releaseSeatsForBooking(booking);
-        }
+        releaseSeatsForBooking(booking);
 
         Booking saved = bookingRepository.save(booking);
         log.info("Booking cancelled: {} refund: {}", NullSafeUtils.safeToString(bookingId), NullSafeUtils.safeToString(refundAmount));

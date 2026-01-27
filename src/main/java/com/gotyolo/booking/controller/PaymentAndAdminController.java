@@ -9,7 +9,6 @@ import com.gotyolo.booking.service.WebhookService;
 import com.gotyolo.booking.utils.NullSafeUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,13 +28,13 @@ public class PaymentAndAdminController {
      * POST /api/v1/payments/webhook
      */
     @PostMapping("/payments/webhook")
-    public ResponseEntity<Void> handlePaymentWebhook(@RequestBody WebhookRequest webhookRequest) {
+    public ResponseEntity<ApiResponse<WebhookRequest>> handlePaymentWebhook(@RequestBody WebhookRequest webhookRequest) {
         String bookingId = NullSafeUtils.safeToString(webhookRequest.bookingId());
         String status = NullSafeUtils.safeToString(webhookRequest.status());
         log.info("Payment webhook received - Booking: {} Status: {}", bookingId, status);
 
         webhookService.processWebhook(webhookRequest);
-        return ResponseEntity.ok().build(); // ALWAYS 200 for payment provider ✅
+        return ResponseEntity.ok(ApiResponse.success("Processed webhook successfully", webhookRequest)); // ALWAYS 200 for payment provider
     }
 
     /**
