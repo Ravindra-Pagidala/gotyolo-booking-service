@@ -11,6 +11,26 @@ BOOKINGS=()
 # === DYNAMIC COLORS FOR MULTI-USER TRACKING ===
 colors=(31 32 33 34 35 36)  # Red Green Yellow Blue Magenta Cyan
 
+# === 0. HEALTH CHECK ===
+echo "0️⃣ Checking service health..."
+HEALTH_RESP=$(curl -s -w "\nHTTP:%{http_code}" "$BASE_URL/api/v1/health" || true)
+HEALTH_CODE=$(echo "$HEALTH_RESP" | grep HTTP | cut -d: -f2 | tr -d '\n')
+HEALTH_BODY=$(echo "$HEALTH_RESP" | sed '/HTTP/d')
+
+if [[ "$HEALTH_CODE" != "200" ]]; then
+  echo "❌ Service is NOT healthy (HTTP $HEALTH_CODE)"
+  echo "Response: $HEALTH_BODY"
+  exit 1
+fi
+
+HEALTH_STATUS=$(echo "$HEALTH_BODY" | jq -r '.status')
+if [[ "$HEALTH_STATUS" != "UP" ]]; then
+  echo "❌ Service health status is not UP: $HEALTH_STATUS"
+  exit 1
+fi
+
+echo "✅ Service is UP. Continuing tests..."
+
 # === 1. CREATE FRESH TRIP (DYNAMIC CAPACITY) ===
 CAPACITY=8  # Dynamic capacity
 echo "1️⃣ Creating trip with $CAPACITY seats..."
@@ -29,22 +49,22 @@ for i in {0..2}; do
   USER_ID=$(uuidgen)
   USERS[$i]=$USER_ID
   COLOR=${colors[$i]}
-  
+
   echo ""
   echo -e "\033[${COLOR}m🔸 USER $((i+1)): $USER_ID\033[0m"
   echo "   📤 REQUEST BODY:"
   echo "   POST /api/v1/trips/$TRIP_ID/book"
   echo "   { \"userId\": \"$USER_ID\", \"numSeats\": 1 }"
-  
+
   RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" -X POST "$BASE_URL/api/v1/trips/$TRIP_ID/book" \
     -H "Content-Type: application/json" \
     -d "{\"userId\":\"$USER_ID\",\"numSeats\":1}")
-  
+
   HTTP_CODE=$(echo "$RESPONSE" | grep HTTP | cut -d: -f2 | tr -d '\n')
   BODY=$(echo "$RESPONSE" | sed '/HTTP/d')
   BOOKING_ID=$(echo "$BODY" | jq -r '.data.id')
   BOOKINGS[$i]=$BOOKING_ID
-  
+
   echo "   📥 RESPONSE ($HTTP_CODE):"
   echo "   $BODY" | jq . | head -20
   echo -e "\033[${COLOR}m   ✅ Booking ID: $BOOKING_ID\033[0m"
@@ -57,24 +77,24 @@ for i in {0..2}; do
   USER_ID=${USERS[$i]}
   BOOKING_ID=${BOOKINGS[$i]}
   COLOR=${colors[$i]}
-  
+
   echo -e "\n\033[${COLOR}m🔸 USER $((i+1)) IDEMPOTENCY: $BOOKING_ID\033[0m"
   echo "   ⏳ BEFORE: $(curl -s "$BASE_URL/api/v1/bookings/$BOOKING_ID" | jq -r '.data.state')"
-  
+
   # WEBHOOK #1
   echo "   🔄 WEBHOOK #1 (idempotencyKey='user${i}-demo-123'):"
   WEBHOOK1=$(curl -s -X POST "$BASE_URL/api/v1/payments/webhook" \
     -H "Content-Type: application/json" \
     -d "{\"bookingId\":\"$BOOKING_ID\",\"status\":\"success\",\"idempotencyKey\":\"user${i}-demo-123\"}")
   echo "   $WEBHOOK1" | jq .
-  
+
   # WEBHOOK #2 (DUPLICATE)
   echo "   🔄 WEBHOOK #2 (SAME idempotencyKey):"
   WEBHOOK2=$(curl -s -X POST "$BASE_URL/api/v1/payments/webhook" \
     -H "Content-Type: application/json" \
     -d "{\"bookingId\":\"$BOOKING_ID\",\"status\":\"success\",\"idempotencyKey\":\"user${i}-demo-123\"}")
   echo "   $WEBHOOK2" | jq .
-  
+
   echo "   📊 FINAL STATE: $(curl -s "$BASE_URL/api/v1/bookings/$BOOKING_ID" | jq -r '.data.state')"
   echo "   💾 DB idempotencyKey: $(curl -s "$BASE_URL/api/v1/bookings/$BOOKING_ID" | jq -r '.data.idempotencyKey')"
 done
@@ -89,13 +109,13 @@ for i in {1..12}; do
   CODE=$(curl -s -w "%{http_code}" -o /dev/null -X POST "$BASE_URL/api/v1/trips/$TRIP_ID/book" \
     -H "Content-Type: application/json" \
     -d "{\"userId\":\"$(uuidgen)\",\"numSeats\":1}" 2>/dev/null || echo "500")
-  
+
   case $CODE in
     201) ((SUCCESS++));;
     409) ((CONFLICT++));;
     *)   ((ERROR++));;
   esac
-  
+
   printf "   Thread %2d: %s\n" $i $CODE
 done
 
@@ -129,20 +149,10 @@ TOTAL_BOOKED=$((INITIAL_SEATS - FINAL_SEATS))
 printf "🚌 %-20s | %s\n" "TRIP CAPACITY:" "$CAPACITY seats"
 printf "👥 %-20s | %s users\n" "MANUAL USERS:" "3 (detailed)"
 printf "⚡ %-20s | %d/%d → %s\n" "CONCURRENCY:" "$SUCCESS" "$(($CAPACITY-3))" "$( [ $SUCCESS -le $(($CAPACITY-3)) ] && echo "✅ PASS" || echo "❌ FAIL" )"
-printf "💰 %-20s | ✅ PASS\n" "REFUND:" "$(echo "$REFUND_RESP" | jq -r '.data.refundAmount')"
-printf "🔄 %-20s | ✅ PASS\n" "IDEMPOTENCY:" "All 3 users protected"
-printf "📊 %-20s | ✅ PASS\n" "ADMIN APIs:" "Metrics + At-Risk work"
+printf "💰 %-20s | %s\n" "REFUND:" "$(echo "$REFUND_RESP" | jq -r '.data.refundAmount')"
+printf "🔄 %-20s | %s\n" "IDEMPOTENCY:" "All 3 users protected"
+printf "📊 %-20s | %s\n" "ADMIN APIs:" "Metrics + At-Risk work"
 printf "📈 %-20s | %d/%d\n" "OCCUPANCY:" "$TOTAL_BOOKED" "$CAPACITY"
 
 echo ""
-echo "🎯 ALL REQUIREMENTS SATISFIED:"
-echo "✅ Multi-user bookings with full request/response bodies"
-echo "✅ Dynamic capacity (change CAPACITY variable)"
-echo "✅ Idempotency proof per user (shows DB storage)"
-echo "✅ Concurrency protection (dynamic seat math)"
-echo "✅ Refund policy working"
-echo "✅ Admin visibility (metrics + at-risk)"
-echo "✅ Works every run (fresh UUIDs + new trips)"
-
-echo ""
-echo "🚀 PRODUCTION READY! Run anytime with: ./ultimate-test.sh"
+echo "🎯 ALL REQUIREMENTS SATISFIED"
