@@ -37,8 +37,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     void saveIdempotencyKeyOnly(@Param("key") String key);
 
     // Total booked seats by state (SUM numSeats)
-    @Query("SELECT SUM(b.numSeats) FROM Booking b WHERE b.tripId = :tripId AND b.state = :state")
-    Integer countTotalSeatsByTripIdAndState(@Param("tripId") UUID tripId, @Param("state") BookingState state);
+    @Query("""
+       SELECT COALESCE(SUM(b.numSeats), 0)
+       FROM Booking b
+       WHERE b.tripId = :tripId AND b.state = :state
+       """)
+    Integer countTotalSeatsByTripIdAndState(@Param("tripId") UUID tripId,
+                                            @Param("state") BookingState state);
+
 
     @Query("SELECT COALESCE(SUM(b.priceAtBooking), 0) FROM Booking b " +
             "WHERE b.tripId = :tripId AND b.state = :state")

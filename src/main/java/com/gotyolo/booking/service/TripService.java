@@ -145,9 +145,12 @@ public class TripService {
         log.info("Calculating booking summary...");
         TripMetricsResponse.BookingSummary summary = calculateBookingSummary(tripId);
 
-        int confirmedSeats = bookingRepository.countTotalSeatsByTripIdAndState(tripId, BookingState.CONFIRMED);
+        log.debug("Fetching confirmed seats count from DB...");
 
-        log.info("Confirmed seats count={}", confirmedSeats);
+        Integer confirmedSeatsRaw = bookingRepository.countTotalSeatsByTripIdAndState(tripId, BookingState.CONFIRMED);
+        int confirmedSeats = confirmedSeatsRaw != null ? confirmedSeatsRaw : 0;
+
+        log.info("Confirmed seats = {}", confirmedSeats);
 
         double occupancyPercent = trip.getMaxCapacity() > 0
                 ? (double) confirmedSeats / trip.getMaxCapacity() * 100
