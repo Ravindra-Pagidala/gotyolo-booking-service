@@ -1,11 +1,15 @@
 package com.gotyolo.booking.controller;
 
-import com.gotyolo.booking.dto.*;
+import com.gotyolo.booking.dto.ApiResponse;
+import com.gotyolo.booking.dto.AtRiskTripsResponse;
+import com.gotyolo.booking.dto.TripMetricsResponse;
+import com.gotyolo.booking.dto.WebhookRequest;
 import com.gotyolo.booking.service.TripService;
 import com.gotyolo.booking.service.WebhookService;
 import com.gotyolo.booking.utils.NullSafeUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,27 +26,27 @@ public class PaymentAndAdminController {
 
     /**
      * Payment provider webhook endpoint (ALWAYS returns 200)
-     * POST /api/v1/payments/webhooks
+     * POST /api/v1/payments/webhook
      */
     @PostMapping("/payments/webhook")
     public ResponseEntity<Void> handlePaymentWebhook(@RequestBody WebhookRequest webhookRequest) {
         String bookingId = NullSafeUtils.safeToString(webhookRequest.bookingId());
         String status = NullSafeUtils.safeToString(webhookRequest.status());
         log.info("Payment webhook received - Booking: {} Status: {}", bookingId, status);
-        
+
         webhookService.processWebhook(webhookRequest);
-        return ResponseEntity.ok().build(); // ALWAYS 200 for payment provider
+        return ResponseEntity.ok().build(); // ALWAYS 200 for payment provider ✅
     }
 
     /**
      * Admin: Get comprehensive trip metrics and analytics
-     * GET /api/v1/admin/trips/{tripId}/analytics
+     * GET /api/v1/admin/trips/{tripId}/metrics
      */
     @GetMapping("/admin/trips/{tripId}/metrics")
-    public ResponseEntity<TripMetricsResponse> getTripAnalytics(@PathVariable UUID tripId) {
+    public ResponseEntity<ApiResponse<TripMetricsResponse>> getTripAnalytics(@PathVariable UUID tripId) {
         log.debug("Admin fetching analytics for trip: {}", NullSafeUtils.safeToString(tripId));
         TripMetricsResponse metrics = tripService.getTripMetrics(tripId);
-        return ResponseEntity.ok(metrics);
+        return ResponseEntity.ok(ApiResponse.success("Trip metrics retrieved", metrics));
     }
 
     /**
@@ -50,9 +54,9 @@ public class PaymentAndAdminController {
      * GET /api/v1/admin/trips/at-risk
      */
     @GetMapping("/admin/trips/at-risk")
-    public ResponseEntity<AtRiskTripsResponse> listAtRiskTrips() {
+    public ResponseEntity<ApiResponse<AtRiskTripsResponse>> listAtRiskTrips() {
         log.debug("Admin fetching at-risk trips");
         AtRiskTripsResponse atRiskTrips = tripService.getAtRiskTrips();
-        return ResponseEntity.ok(atRiskTrips);
+        return ResponseEntity.ok(ApiResponse.success("At-risk trips retrieved", atRiskTrips));
     }
 }

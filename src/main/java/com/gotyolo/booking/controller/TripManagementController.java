@@ -1,6 +1,8 @@
 package com.gotyolo.booking.controller;
 
-import com.gotyolo.booking.dto.*;
+import com.gotyolo.booking.dto.ApiResponse;
+import com.gotyolo.booking.dto.CreateTripRequest;
+import com.gotyolo.booking.dto.TripResponse;
 import com.gotyolo.booking.service.TripService;
 import com.gotyolo.booking.utils.NullSafeUtils;
 import lombok.RequiredArgsConstructor;
@@ -26,10 +28,10 @@ public class TripManagementController {
      * GET /api/v1/trips
      */
     @GetMapping
-    public ResponseEntity<List<TripResponse>> listAvailableTrips() {
+    public ResponseEntity<ApiResponse<List<TripResponse>>> listAvailableTrips() {
         log.debug("Listing all available trips");
         List<TripResponse> trips = tripService.getPublishedTrips();
-        return ResponseEntity.ok(trips);
+        return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", trips));
     }
 
     /**
@@ -37,10 +39,10 @@ public class TripManagementController {
      * GET /api/v1/trips/{tripId}
      */
     @GetMapping("/{tripId}")
-    public ResponseEntity<TripResponse> getTripDetails(@PathVariable UUID tripId) {
+    public ResponseEntity<ApiResponse<TripResponse>> getTripDetails(@PathVariable UUID tripId) {
         log.debug("Fetching trip details: {}", NullSafeUtils.safeToString(tripId));
         TripResponse trip = tripService.getTripDetails(tripId);
-        return ResponseEntity.ok(trip);
+        return ResponseEntity.ok(ApiResponse.success("Trip details retrieved", trip));
     }
 
     /**
@@ -48,9 +50,10 @@ public class TripManagementController {
      * POST /api/v1/trips
      */
     @PostMapping
-    public ResponseEntity<TripResponse> createNewTrip(@Valid @RequestBody CreateTripRequest request) {
+    public ResponseEntity<ApiResponse<TripResponse>> createNewTrip(@Valid @RequestBody CreateTripRequest request) {
         log.info("Creating trip: {}", NullSafeUtils.safeToString(request.title()));
         TripResponse createdTrip = tripService.createTrip(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdTrip);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Trip created successfully", createdTrip));
     }
 }
