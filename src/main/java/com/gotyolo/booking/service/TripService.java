@@ -99,47 +99,45 @@ public class TripService {
         log.debug("Calculating metrics for trip: {}", NullSafeUtils.safeToString(tripId));
         Trip trip = getTripById(tripId);
 
-        List<Booking> confirmedBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.CONFIRMED);
-        List<Booking> pendingBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.PENDING_PAYMENT);
-        List<Booking> cancelledBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.CANCELLED);
-        List<Booking> expiredBookings = bookingRepository.findByTripIdAndState(tripId, BookingState.EXPIRED);
+        // 1. Booking Counts
+        TripMetricsResponse.BookingSummary summary = calculateBookingSummary(tripId);
 
-        int confirmedCount = confirmedBookings.size();
-        int pendingCount = pendingBookings.size();
-        int cancelledCount = cancelledBookings.size();
-        int expiredCount = expiredBookings.size();
+        // 2. Occupancy (CONFIRMED seats only )
+        int confirmedSeats = bookingRepository.countTotalSeatsByTripIdAndState(tripId, BookingState.CONFIRMED);
+        double occupancyPercent = trip.getMaxCapacity() > 0
+                ? (double) confirmedSeats / trip.getMaxCapacity() * 100 : 0.0;
 
-        int confirmedBookedSeats = confirmedBookings.stream()
-                .mapToInt(b -> NullSafeUtils.safeToInt(b.getNumSeats()))
-                .sum();
-
-        Double occupancyPercent = trip.getMaxCapacity() != null && trip.getMaxCapacity() > 0
-                ? (double) confirmedBookedSeats / trip.getMaxCapacity() * 100
-                : 0.0;
-
-        BigDecimal grossRevenue = confirmedBookings.stream()
-                .map(Booking::getPriceAtBooking)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal refundsIssued = cancelledBookings.stream()
-                .map(Booking::getRefundAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal netRevenue = grossRevenue.subtract(refundsIssued);
+        // 3. CORRECTED REVENUE CALCULATION
+        TripMetricsResponse.FinancialSummary finances = calculateFinancialMetrics(tripId);
 
         return new TripMetricsResponse(
-                trip.getId(),
-                trip.getTitle(),
+                trip.getId(), trip.getTitle(),
                 Math.round(occupancyPercent * 100.0) / 100.0,
-                trip.getMaxCapacity(),
-                confirmedBookedSeats,
-                trip.getAvailableSeats(),
-                new TripMetricsResponse.BookingSummary(confirmedCount, pendingCount, cancelledCount, expiredCount),
-                new TripMetricsResponse.FinancialSummary(grossRevenue, refundsIssued, netRevenue)
+                trip.getMaxCapacity(), confirmedSeats, trip.getAvailableSeats(),
+                summary, finances
         );
     }
+
+    private TripMetricsResponse.BookingSummary calculateBookingSummary(UUID tripId) {
+        int confirmed = bookingRepository.findByTripIdAndState(tripId, BookingState.CONFIRMED).size();
+        int pending = bookingRepository.findByTripIdAndState(tripId, BookingState.PENDING_PAYMENT).size();
+        int cancelled = bookingRepository.findByTripIdAndState(tripId, BookingState.CANCELLED).size();
+        int expired = bookingRepository.findByTripIdAndState(tripId, BookingState.EXPIRED).size();
+        return new TripMetricsResponse.BookingSummary(confirmed, pending, cancelled, expired);
+    }
+
+    private TripMetricsResponse.FinancialSummary calculateFinancialMetrics(UUID tripId) {
+        // GROSS: Only CONFIRMED bookings revenue
+        BigDecimal grossRevenue = bookingRepository.calculateGrossRevenue(tripId, BookingState.CONFIRMED);
+
+        // REFUNDS: Only CANCELLED bookings refunds
+        BigDecimal refundsIssued = bookingRepository.calculateTotalRefunds(tripId);
+
+        BigDecimal netRevenue = grossRevenue.subtract(refundsIssued.abs()).max(BigDecimal.ZERO);
+
+        return new TripMetricsResponse.FinancialSummary(grossRevenue, refundsIssued, netRevenue);
+    }
+
 
 
     private TripResponse mapToTripResponse(Trip trip) {
