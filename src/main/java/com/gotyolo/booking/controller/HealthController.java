@@ -1,4 +1,4 @@
-package com.gotyolo.booking;
+package com.gotyolo.booking.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
