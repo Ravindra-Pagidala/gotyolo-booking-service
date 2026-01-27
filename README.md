@@ -1,24 +1,22 @@
 # GoTyolo Booking System - Production-Ready Travel Platform
 
 ## Table of Contents
-
-- [Overview]
-- [Project Structure]
-- [Quick Start Guide]
-- [Technical Architecture]
-- [Core Features Implementation]
-- [API Documentation]
-- [Verification & Testing]
-- [Production Validation]
+- [Overview](#overview)
+- [Project Structure](#project-structure)
+- [Quick Start Guide](#quick-start-guide)
+- [Technical Architecture](#technical-architecture)
+- [Core Features Implementation](#core-features-implementation)
+- [API Documentation](#api-documentation)
+- [Verification & Testing](#verification--testing)
+- [Production Validation](#production-validation)
 
 ## Overview
 
 GoTyolo is a complete backend API for a travel booking platform designed to handle real-world production requirements. This system manages trip creation, seat reservations with concurrency protection, payment webhook processing with idempotency, intelligent refund policies, and comprehensive admin analytics.
 
 The implementation demonstrates production-grade solutions for all specified challenges:
-
 - **Concurrency safety** through database row-level locking
-- **Webhook idempotency** through unique constraint enforcement
+- **Webhook idempotency** through unique constraint enforcement  
 - **Precise refund calculations** following business rules
 - **Complete state machine** with auto-expiry
 - **Real-time admin visibility** with accurate metrics
@@ -27,40 +25,42 @@ Built with Spring Boot, PostgreSQL, and Docker Compose for single-command deploy
 
 ## Project Structure
 
-**No GitHub clone required.** This is a self-contained project requiring only these files in a single directory:
+This is a self-contained project requiring only these files in a single directory:
 
-`text~/Desktop/
+```
+~/Desktop/
 ├── docker-compose.yml     # PostgreSQL + Spring Boot services
 ├── Dockerfile            # Multi-stage Java 17 build
 ├── pom.xml              # Maven dependencies
 ├── src/                 # Spring Boot source (controllers, entities, services)
-└── script.sh            # Comprehensive E2E test suite`
+└── script.sh            # Comprehensive E2E test suite
+```
 
 **All files provided.** Place them in `~/Desktop` and run commands from there.
 
 ## Quick Start Guide
 
-## Prerequisites
-
+### Prerequisites
 1. **Docker Desktop** installed and running
 2. **Terminal** access (Mac/Linux terminal)
 3. **Files in place** at `~/Desktop` (no cloning needed)
 
-## Step-by-Step Setup (2 minutes total)
+### Step-by-Step Setup (2 minutes total)
 
-## Step 1: Navigate to Project Directory
-
-`bashcd ~/Desktop
-ls -la  # Verify: docker-compose.yml, Dockerfile, pom.xml, script.sh exist`
+#### Step 1: Navigate to Project Directory
+```bash
+cd ~/Desktop
+ls -la  # Verify: docker-compose.yml, Dockerfile, pom.xml, script.sh exist
+```
 
 **Why this directory?** Docker Compose automatically uses `docker-compose.yml` from current directory. All your files should be here.
 
-## Step 2: Start Services (Builds from source)
-
-`bashdocker compose up -d --build`
+#### Step 2: Start Services (Builds from source)
+```bash
+docker compose up -d --build
+```
 
 **What happens:**
-
 - Docker builds Java app from `Dockerfile` (Maven multi-stage)
 - PostgreSQL container starts first (healthcheck ensures ready)
 - Spring Boot app connects to DB (`SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/gotyolo`)
@@ -68,17 +68,18 @@ ls -la  # Verify: docker-compose.yml, Dockerfile, pom.xml, script.sh exist`
 - Takes 60-90 seconds for full startup
 
 **Verify startup:**
+```bash
+docker compose ps  # Both services should show "healthy"
+curl http://localhost:8080/actuator/health  # Returns {"status":"UP"}
+```
 
-`bashdocker compose ps  # Both services should show "healthy"
-curl http://localhost:8080/actuator/health  # Returns {"status":"UP"}`
-
-## Step 3: Run Complete Test Suite
-
-`bashchmod +x script.sh
-./script.sh`
+#### Step 3: Run Complete Test Suite
+```bash
+chmod +x script.sh
+./script.sh
+```
 
 **What the script tests (3 minutes):**
-
 1. Creates trip with 8 seats capacity
 2. 3 sequential users book (manual test with full request/response logging)
 3. Each user tests webhook idempotency (duplicate webhook ignored)
@@ -87,26 +88,29 @@ curl http://localhost:8080/actuator/health  # Returns {"status":"UP"}`
 6. Admin metrics validation
 7. At-risk trips API
 
-## Step 4: Verify Database Results
-
-`bash# Latest trip (proves seat reservation works)
+#### Step 4: Verify Database Results
+```bash
+# Latest trip (proves seat reservation works)
 docker exec gotyolo-db psql -U postgres -d gotyolo -c "SELECT id, title, max_capacity, available_seats, status FROM trips ORDER BY created_at DESC LIMIT 1;"
 
 # Test bookings (proves concurrency + refunds + idempotency)
-docker exec gotyolo-db psql -U postgres -d gotyolo -c "SELECT t.id as trip_id, t.title as trip_title, b.user_id, b.id as booking_id, b.state, b.num_seats, b.refund_amount, b.created_at FROM bookings b JOIN trips t ON b.trip_id = t.id WHERE t.title LIKE '%Test%' ORDER BY b.created_at DESC LIMIT 8;"`
+docker exec gotyolo-db psql -U postgres -d gotyolo -c "SELECT t.id as trip_id, t.title as trip_title, b.user_id, b.id as booking_id, b.state, b.num_seats, b.refund_amount, b.created_at FROM bookings b JOIN trips t ON b.trip_id = t.id WHERE t.title LIKE '%Test%' ORDER BY b.created_at DESC LIMIT 8;"
+```
 
-## Step 5: View Logs (Optional)
-
-`bashdocker compose logs app --tail=100  # See all booking/refund operations
-docker compose down -v              # Cleanup when done`
+#### Step 5: View Logs (Optional)
+```bash
+docker compose logs app --tail=100  # See all booking/refund operations
+docker compose down -v              # Cleanup when done
+```
 
 ## Technical Architecture
 
-## Database Schema Design
+### Database Schema Design
 
 **Two tables with precise relationships:**
 
-`texttrips:
+```
+trips:
 - id (UUID PRIMARY KEY)
 - title, max_capacity, available_seats (INTEGER)
 - price (DECIMAL), status (ENUM: DRAFT/PUBLISHED)
@@ -118,71 +122,75 @@ bookings:
 - user_id (UUID), num_seats (INTEGER)
 - state (ENUM: PENDING_PAYMENT/CONFIRMED/CANCELLED/EXPIRED)
 - idempotency_key (VARCHAR UNIQUE), refund_amount (DECIMAL)
-- expires_at, created_at, updated_at (TIMESTAMP)`
+- expires_at, created_at, updated_at (TIMESTAMP)
+```
 
 **Critical design choice**: `available_seats` denormalized on `trips` table for fast reads. Updated atomically in transactions.
 
-## Transaction Flow
+### Transaction Flow
 
 Every booking operation uses database transactions:
 
-`sqlBEGIN;
+```sql
+BEGIN;
 -- Lock trip row (prevents race conditions)
 SELECT * FROM trips WHERE id = ? FOR UPDATE;
 IF available_seats >= num_seats THEN
   INSERT INTO bookings ...;
   UPDATE trips SET available_seats = available_seats - num_seats;
 END IF;
-COMMIT;`
+COMMIT;
+```
 
 ## Core Features Implementation
 
-## 1. Overbooking Prevention - Database Row Locking
+### 1. Overbooking Prevention - Database Row Locking
 
 **The Problem**: Two users booking the last seat simultaneously could both succeed.
 
 **Solution**: PostgreSQL `SELECT FOR UPDATE` locks the entire trip row during booking.
 
 **Step-by-step execution:**
-
 1. User A calls `/trips/{tripId}/book` → `SELECT * FROM trips WHERE id = ? FOR UPDATE`
 2. Database **locks trip row** - User B blocks here
 3. User A checks `available_seats >= num_seats` → creates booking → decrements seats → **COMMIT**
 4. User B proceeds → sees `available_seats = 0` → **returns 409 Conflict**
 
 **Live proof from `script.sh`:**
-
-`text8 seats total → 3 manual bookings = 5 seats left
+```
+8 seats total → 3 manual bookings = 5 seats left
 12 concurrent threads launched simultaneously
-Result: exactly 5 succeeded (201), 7 failed (409)`
+Result: exactly 5 succeeded (201), 7 failed (409)
+```
 
 This precision is impossible without row-level locking.
 
-## 2. Webhook Idempotency - Unique Database Constraint
+### 2. Webhook Idempotency - Unique Database Constraint
 
 **The Problem**: Payment provider retries webhooks → double processing → double confirmations.
 
 **Solution**: Unique constraint on `idempotency_key` prevents duplicates.
 
 **Step-by-step webhook flow:**
-
 1. First webhook (`idempotency_key="user0-demo-123"`): Creates/updates booking → stores key
 2. Second webhook (same key): Database rejects duplicate → controller returns 200 OK
 3. Booking state unchanged → safe idempotency
 
 **Live proof from `script.sh`:**
-
-`textWEBHOOK #1 (user0-demo-123): PENDING_PAYMENT → CONFIRMED
+```
+WEBHOOK #1 (user0-demo-123): PENDING_PAYMENT → CONFIRMED
 WEBHOOK #2 (same key): "Processed successfully" → state UNCHANGED
-Database shows: idempotency_key="user0-demo-123" ✓`
+Database shows: idempotency_key="user0-demo-123" ✓
+```
 
-## 3. Auto-Expiry - Background Scheduler
+### 3. Auto-Expiry - Background Scheduler
 
 **The Problem**: Payments timeout after 15 minutes → seats must be released.
 
 **Solution**: Spring `@Scheduled` job runs every minute:
 
-`java@Scheduled(fixedRate = 60000)
+```java
+@Scheduled(fixedRate = 60000)
 public void processExpiredBookings() {
     List<Booking> pendingExpired = bookingRepository
         .findByStateAndExpiresAtBefore("PENDING_PAYMENT", Instant.now());
@@ -191,16 +199,16 @@ public void processExpiredBookings() {
         booking.setState("EXPIRED");
         tripRepository.incrementSeats(booking.getTripId(), booking.getNumSeats());
     }
-}`
+}
+```
 
 **Database proof**: All `PENDING_PAYMENT` bookings have `expires_at = created_at + 15min`.
 
-## 4. Refund Policy - Precise Math
+### 4. Refund Policy - Precise Math
 
 **Business Rule**: `refund = price_at_booking × (1 - cancellation_fee_percent/100)`
 
 **Implementation steps:**
-
 1. Check `current_date < trip_start_date - refundable_until_days_before`
 2. If eligible: `refund_amount = 5000 × (1 - 10/100) = 4500`
 3. Set `state=CANCELLED`, `refund_amount=4500`
@@ -208,11 +216,11 @@ public void processExpiredBookings() {
 
 **Live proof**: User 1 booking shows `refund_amount: 4500.0000` ✓
 
-## 5. Admin Visibility - Real-time Analytics
+### 5. Admin Visibility - Real-time Analytics
 
 **Trip Metrics** (`GET /admin/trips/{id}/metrics`):
-
-`text{
+```
+{
   "total_seats": 8,
   "available_seats": 3, 
   "occupancy_percent": 62.5,
@@ -221,14 +229,15 @@ public void processExpiredBookings() {
     "refunds_issued": 4500,
     "net_revenue": 20500
   }
-}`
+}
+```
 
 **At-risk trips**: Departure < 7 days AND occupancy < 50%.
 
 ## API Documentation
 
 | Method | Endpoint | Description | Response Codes |
-| --- | --- | --- | --- |
+|--------|----------|-------------|---------------|
 | `POST` | `/api/v1/trips` | Create trip | 201 Created |
 | `POST` | `/api/v1/trips/{tripId}/book` | Reserve seats | 201, 409 (no seats) |
 | `POST` | `/api/v1/payments/webhook` | Payment callback | 200 (always) |
@@ -238,7 +247,7 @@ public void processExpiredBookings() {
 
 ## Verification & Testing
 
-## Production Test Script (`script.sh`)
+### Production Test Script (`script.sh`)
 
 **Comprehensive 3-minute test proving all requirements:**
 
@@ -249,50 +258,58 @@ public void processExpiredBookings() {
 5. **Refund**: $5000 → $4500 (10% fee)
 6. **Admin APIs**: Metrics + at-risk validation
 
-## Database Verification Queries
+### Database Verification Queries
 
 Run these **after** `script.sh` completes:
 
-`bash# Latest test trip
+```bash
+# Latest test trip
 docker exec gotyolo-db psql -U postgres -d gotyolo -c "SELECT id, title, max_capacity, available_seats, status FROM trips ORDER BY created_at DESC LIMIT 1;"
 # Expected: available_seats reduced from 8
 
 # Test bookings (proves everything worked)
 docker exec gotyolo-db psql -U postgres -d gotyolo -c "SELECT t.id as trip_id, t.title as trip_title, b.user_id, b.id as booking_id, b.state, b.num_seats, b.refund_amount, b.created_at FROM bookings b JOIN trips t ON b.trip_id = t.id WHERE t.title LIKE '%Test%' ORDER BY b.created_at DESC LIMIT 8;"
-# Expected: CONFIRMED, CANCELLED($4500), idempotency_keys`
+# Expected: CONFIRMED, CANCELLED($4500), idempotency_keys
+```
 
 ## Production Validation Results
 
 **Live test outcomes confirming all requirements:**
 
-`text✅ Trip created: 8 seats → available_seats=3 after tests
+```
+✅ Trip created: 8 seats → available_seats=3 after tests
 ✅ Concurrency: 12 parallel → exactly 5 succeeded (locking perfect)
 ✅ Idempotency: 3 unique keys stored, duplicates ignored  
 ✅ Refund: $5000 → $4500 (10% fee calculation correct)
 ✅ State machine: PENDING→CONFIRMED→CANCELLED complete
 ✅ No overbooking: available_seats never negative
-✅ Scheduler: expires_at timers set correctly`
+✅ Scheduler: expires_at timers set correctly
+```
 
 ## Logs & Monitoring
 
 **Application logs show real operations:**
-
-`bashdocker compose logs app --tail=100 --follow`
+```bash
+docker compose logs app --tail=100 --follow
+```
 
 **Look for these patterns:**
-
-`textINFO  - Booking created: PENDING_PAYMENT, expires_at=...
+```
+INFO  - Booking created: PENDING_PAYMENT, expires_at=...
 INFO  - Webhook processed: idempotency_key=user0-demo-123
 INFO  - Booking confirmed from payment webhook
 INFO  - Refund calculated: 4500.00 (10% fee applied)
-INFO  - BookingExpiryScheduler: No expired bookings`
+INFO  - BookingExpiryScheduler: No expired bookings
+```
 
 ## Cleanup & Reset
 
-`bashdocker compose down -v  # Removes containers + database volumes (fresh start)
-docker system prune -f # Clears unused images`
+```bash
+docker compose down -v  # Removes containers + database volumes (fresh start)
+docker system prune -f # Clears unused images
+```
 
----
+***
 
 **This system is production-ready. Single command deployment → comprehensive automated testing → database verification → all requirements satisfied with live proof.**
 
