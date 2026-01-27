@@ -1,20 +1,4 @@
-version: '3.8'
 services:
-  app:
-    build: .
-    container_name: gotyolo-app
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/gotyolo
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-      - SPRING_JPA_HIBERNATE_DDL_AUTO= create
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
   db:
     image: postgres:16-alpine
     container_name: gotyolo-db
@@ -27,10 +11,33 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gotyolo"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: gotyolo-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/gotyolo
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: never
+
+      LOGGING_FILE_NAME: /app/logs/gotyolo.log
+
+    volumes:
+      - ./logs:/app/logs
+
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
